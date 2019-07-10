@@ -32,17 +32,4 @@ class AutoLoader extends SwoftComponent
     {
         return [];
     }
-
-    /**
-     * @return array
-     */
-    public function beans(): array
-    {
-        return [
-            'sidecar' => [
-                'class' => '',
-
-            ]
-        ];
-    }
 }
