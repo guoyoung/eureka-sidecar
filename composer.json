@@ -1,0 +1,20 @@
+{
+    "name": "gyoung/eureka-sidecar",
+    "description": "base on swoft2.0, php eureka sidecar",
+    "type": "library",
+    "authors": [
+        {
+            "name": "guoyang",
+            "email": "583045376@qq.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=7.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sidecar\\": "src/"
+        }
+    }
+}
