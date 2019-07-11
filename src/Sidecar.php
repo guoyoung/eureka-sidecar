@@ -71,7 +71,7 @@ class Sidecar
     private function initEurekaParams()
     {
         $eurekaUrls = explode(',', config('sidecar.eurekaUrls'));
-        if (empty($eurekaUrls)) {
+        if (empty($eurekaUrls[0])) {
             throw new SidecarException('sidecar.eurekaUrls is needed,like: http://127.0.0.1:1111/eureka/,http://127.0.0.1:1112/eureka/');
         }
         foreach ($eurekaUrls as $eurekaUrl) {
