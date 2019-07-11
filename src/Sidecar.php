@@ -4,8 +4,7 @@
 namespace Sidecar;
 
 use Sidecar\Constant\SidecarConstant;
-use Sidecar\SidecarException;
-use Sidecar\Util\SidecarContext;
+use Sidecar\Exception\SidecarException;
 use Sidecar\Util\SidecarTable;
 use Sidecar\Http\HttpClient;
 use Swlib\Http\ContentType;
@@ -47,12 +46,6 @@ class Sidecar
      * @var array
      */
     private $appInstance = [];
-
-    /**
-     * 正在注册
-     * @var bool
-     */
-    private $registering = false;
 
     /**
      * @var Table
@@ -164,7 +157,6 @@ class Sidecar
 
     /**
      * 注册服务
-     * @return bool
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
@@ -172,46 +164,43 @@ class Sidecar
     {
         $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
-            return true;
+            return;
         }
 
-        $this->registering = true;
-        try {
-            foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
-                list($host, $prefix) = $namePrefix;
-                $headers = array_merge([
-                    'Accept-Encoding' => 'gzip',
-                    'DiscoveryIdentity-Name' => 'DefaultClient',
-                    'DiscoveryIdentity-Version' => '1.4',
-                    'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress'],
-                    'Connection' => 'Keep-Alive'
-                ], $this->defaultHeaders);
+        foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
+            list($host, $prefix) = $namePrefix;
+            $headers = array_merge([
+                'Accept-Encoding' => 'gzip',
+                'DiscoveryIdentity-Name' => 'DefaultClient',
+                'DiscoveryIdentity-Version' => '1.4',
+                'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress'],
+                'Connection' => 'Keep-Alive'
+            ], $this->defaultHeaders);
 
-                $option['headers'] = $headers;
-                $option['base_uri'] = $host;
-                $option['method'] = 'POST';
-                $option['uri'] = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']);
-                $option['use_pool'] = false;
-                $data = json_encode($this->appInstance, JSON_UNESCAPED_SLASHES);
+            $option['headers'] = $headers;
+            $option['base_uri'] = $host;
+            $option['method'] = 'POST';
+            $option['uri'] = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']);
+            $option['use_pool'] = false;
+            $data = json_encode($this->appInstance, JSON_UNESCAPED_SLASHES);
 
-                go(function () use ($data, $option) {
-                    $client = HttpClient::getInstance();
-                    $response = $client->request($data, $option, true, true, false);
-                    if ($response->getStatusCode() == 204) {
-                        CLog::info('eureka-register: success');
-                    }
-                    $data = null;
-                    $option = null;
-                    unset($data, $option);
-                });
+            go(function () use ($data, $option) {
+                $client = HttpClient::getInstance();
+                $response = $client->request($data, $option, true, true, false);
+                if ($response->getStatusCode() == 204) {
+                    CLog::info('eureka-register: success');
+                } else {
+                    CLog::info('eureka-register: failed');
+                }
+                $data = null;
+                $option = null;
+                unset($data, $option);
+            });
 
-                $headers = null;
-                unset($headers);
-            }
-            return true;
-        } finally {
-            $this->registering = false;
+            $headers = null;
+            unset($headers);
         }
+        return;
     }
 
     /**
