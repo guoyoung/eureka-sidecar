@@ -7,6 +7,7 @@ use Swlib\Http\ContentType;
 use Swlib\Http\Exception\HttpExceptionMask;
 use Swlib\Saber;
 use Swoft\Log\Helper\CLog;
+use Swoft\Log\Helper\Log;
 
 /**
  * 使用说明：
@@ -89,13 +90,13 @@ class HttpClient
         $saber->exceptionHandle(function (\Exception $e) use ($uri, $isCLog, $isLog) {
             if ($isLog) {
                 $isCLog ? CLog::error('request ' . $uri . '\'s exception' . get_class($e) . ' occurred, exception message: ' . $e->getMessage())
-                    : LogWriter::error('log id: ' . getLogId() . ' request ' . $uri . '\'s exception' . get_class($e) . ' occurred, exception message: ' . $e->getMessage());
+                    : Log::pushLog('[request ' . $uri . '\'s exception' . get_class($e) . ' occurred, exception message]', $e->getMessage());
             }
         });
 
         !isset($options['method']) && $options['method'] = 'GET';
 
-        null !== $data && $options['data'] = $data;
+        null !== $data && $options['data'] = (is_array($data) ? json_encode($data) : $data);
 
         if (!isset($options['content-type']) || !isset($options['headers']['content-type']) || !isset($options['headers']['Content-Type'])) {
             $options['content-type'] = ContentType::JSON;
@@ -109,18 +110,16 @@ class HttpClient
             $options['use_pool'] = $this->usePool;
         }
 
+        $options['headers']['Accept'] = ContentType::JSON;
+
         if ($isLog) {
-            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s params: ' . json_encode($data)) :
-                LogWriter::info('logid: ' . getLogId() . ' request ' . $options['uri'] . '\'s params: ' . json_encode($data));
+            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s params: ' . ($options['data'] ?? null)) :
+                Log::pushLog('[request ' . $options['uri'] . '\'s params]', ($options['data'] ?? []));
         }
         $response = $saber->request($options);
         if ($isLog) {
             $isCLog ? CLog::info('request ' . $options['uri'] . '\'s time: ' . $response->time) :
-                LogWriter::info('logid: ' . getLogId() . ' request ' . $options['uri'] . '\'s time: ' . $response->time);
-        }
-        if ($isLog) {
-            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s result: ' . $response) :
-                LogWriter::info('logid: ' . getLogId() . ' request ' . $options['uri'] . '\'s result: ' . $response);
+                Log::pushLog('[request ' . $options['uri'] . '\'s time]', $response->time);
         }
         $return = null;
         if ($isRaw) {
@@ -133,6 +132,10 @@ class HttpClient
             $return = $response->getParsedDomObject();
         } else {
             $return = $response;
+        }
+        if ($isLog) {
+            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s result: ' . $return) :
+                Log::pushLog('[request ' . $options['uri'] . '\'s result]', $return);
         }
         $response = null;
         unset($response);

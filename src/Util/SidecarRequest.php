@@ -46,8 +46,14 @@ class SidecarRequest
         }
 
         $option['base_uri'] = (strpos($host, 'http') !== false) ? $host . ':' . $port : $schema . $host . ':' . $port;
+        $option['method'] = strtoupper($method);
+        if ('GET' == $option['method']) {
+            if (!empty($data)) {
+                $uri .= '?' . http_build_query($data);
+                $data = [];
+            }
+        }
         $option['uri'] = $uri;
-        $option['method'] = $method;
         $data && $option['data'] = json_encode($data);
         $http = HttpClient::getInstance();
         $result = $http->request(null, $option, false, $isRaw);

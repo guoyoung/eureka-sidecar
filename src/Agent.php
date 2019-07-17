@@ -8,6 +8,7 @@ use Sidecar\Constant\SidecarConstant;
 use Sidecar\Contract\AgentInterface;
 use Sidecar\Util\SidecarRequest;
 use Sidecar\Util\SidecarTable;
+use Swoft\Bean\Annotation\Mapping\Bean;
 use Swoft\Bean\BeanFactory;
 use Swoft\Context\Context;
 use Swoft\Http\Message\ContentType;
@@ -18,6 +19,7 @@ use Swoft\Http\Server\Annotation\Mapping\RequestMethod;
 /**
  * Class Agent
  * @package Sidecar
+ * @Bean("agent")
  */
 class Agent implements AgentInterface
 {
@@ -75,6 +77,6 @@ class Agent implements AgentInterface
      */
     public function proxy($appName, $uri, $method = 'GET', $data = [], $option = [], $isRaw = false)
     {
-        return SidecarRequest::call($appName, $uri, $method = 'GET', $data = [], $option = [], $isRaw = false);
+        return SidecarRequest::call($appName, $uri, $method, $data, $option, $isRaw);
     }
 }
