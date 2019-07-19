@@ -94,10 +94,19 @@ class Sidecar
         }
         $this->agentParams['sidecar.port'] = config('sidecar.port');
 
+        if (!config('sidecar.applicationName', '')) {
+            throw new SidecarException('sidecar.applicationName is needed');
+        }
+        $this->agentParams['sidecar.applicationName'] = config('sidecar.applicationName');
+
         $ipAddress = config('sidecar.ipAddress', '');
         if (!$ipAddress) {
-            $ips = swoole_get_local_ip();
-            $ipAddress = $ips['eth0'] ?? '';
+            $hostKey = str_replace('-', '_', $this->agentParams['sidecar.applicationName']) . '_SERVICE_HOST';
+            $ipAddress = getenv(strtoupper($hostKey));
+            if (!$ipAddress) {
+                $ips = swoole_get_local_ip();
+                $ipAddress = $ips['eth0'] ?? '';
+            }
             if (!$ipAddress) {
                 throw new SidecarException('get eth0\'s ip failed, sidecar.ipAddress is needed');
             }
@@ -111,11 +120,6 @@ class Sidecar
             throw new SidecarException('sidecar.healthUri is needed');
         }
         $this->agentParams['sidecar.healthUri'] = config('sidecar.healthUri');
-
-        if (!config('sidecar.applicationName', '')) {
-            throw new SidecarException('sidecar.applicationName is needed');
-        }
-        $this->agentParams['sidecar.applicationName'] = config('sidecar.applicationName');
 
         $this->lastDirtyTimestamp = (string)round(microtime(true) * 1000);
 

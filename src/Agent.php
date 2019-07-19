@@ -64,14 +64,14 @@ class Agent implements AgentInterface
     }
 
     /**
-     * 代理，服务转发
      * @param $appName
      * @param $uri
      * @param string $method
      * @param array $data
      * @param array $option
      * @param bool $isRaw
-     * @return array|bool|\Swlib\Saber\Request|\Swlib\Saber\Response
+     * @return array|bool|mixed|\Swlib\Saber\Request|\Swlib\Saber\Response
+     * @throws Exception\SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */

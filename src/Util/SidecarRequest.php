@@ -4,18 +4,20 @@
 namespace Sidecar\Util;
 
 use Sidecar\Constant\SidecarConstant;
+use Sidecar\Exception\SidecarException;
 use Sidecar\Http\HttpClient;
 
 class SidecarRequest
 {
     /**
-     * @param $appName             服务名
-     * @param $uri                 uri
-     * @param string $method       请求方式
-     * @param array $data          请求数据
-     * @param array $option        同httpClient的配置
-     * @param bool $isRaw          是否返回saber response原生对象，默认返回请求结果数组
+     * @param $appName
+     * @param $uri
+     * @param string $method
+     * @param array $data
+     * @param array $option
+     * @param bool $isRaw
      * @return array|bool|\Swlib\Saber\Request|\Swlib\Saber\Response
+     * @throws SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
@@ -23,7 +25,7 @@ class SidecarRequest
     {
         $instance = self::getUsableInstance($appName);
         if (false == $instance) {
-            return false;
+            throw new SidecarException('no usable instance');
         }
         if (isset($instance['port']['@enabled']) && $instance['port']['@enabled']) {
             $port = $instance['port']['$'];
@@ -42,7 +44,7 @@ class SidecarRequest
             $host = $instance['hostName'] ?? '';
         }
         if (empty($host)) {
-            return false;
+            throw new SidecarException('instance host error');
         }
 
         $option['base_uri'] = (strpos($host, 'http') !== false) ? $host . ':' . $port : $schema . $host . ':' . $port;
