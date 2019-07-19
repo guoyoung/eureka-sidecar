@@ -14,7 +14,7 @@ agent bean:
       'eurekaUrls' => 'http://127.0.0.1:8761/eureka',       //eureka注册地址
       'serverPort' => 8089,       //sidecar端口
       'port' => 8089,             //代理服务端口
-      'ipAddress' => 'http://127.0.0.1',        //代理服务ip,必填
+      'ipAddress' => 'http://127.0.0.1',        //代理服务ip,为空则获取本机ip
       'healthUri' => '/health',        //心跳uri
       'applicationName' => 'sidecar-test',  //应用名称
       'sidecarTableMaxLength' => 8096,  //swoole table单个key最大储存长度
