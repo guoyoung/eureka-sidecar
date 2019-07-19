@@ -94,10 +94,18 @@ class Sidecar
         }
         $this->agentParams['sidecar.port'] = config('sidecar.port');
 
-        if (!config('sidecar.ipAddress', '')) {
-            throw new SidecarException('sidecar.ipAddress is needed');
+        $ipAddress = config('sidecar.ipAddress', '');
+        if (!$ipAddress) {
+            $ips = swoole_get_local_ip();
+            $ipAddress = $ips['eth0'] ?? '';
+            if (!$ipAddress) {
+                throw new SidecarException('get eth0\'s ip failed, sidecar.ipAddress is needed');
+            }
         }
-        $this->agentParams['sidecar.ipAddress'] = config('sidecar.ipAddress');
+        if (false === strpos($ipAddress, 'http://')) {
+            $ipAddress = 'http://' . $ipAddress;
+        }
+        $this->agentParams['sidecar.ipAddress'] = $ipAddress;
 
         if (!config('sidecar.healthUri', '')) {
             throw new SidecarException('sidecar.healthUri is needed');
@@ -114,9 +122,10 @@ class Sidecar
         $this->appInstance = [
             'instance' =>[
                 'instanceId' => gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'],
-                'hostName' => gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'],
+//                'hostName' => gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'],
+                'hostName' => substr($this->agentParams['sidecar.ipAddress'], 7),
                 'app' => strtoupper($this->agentParams['sidecar.applicationName']),
-                'ipAddr' => $this->agentParams['sidecar.ipAddress'],
+                'ipAddr' => substr($this->agentParams['sidecar.ipAddress'], 7),
                 'status' => 'UP',
                 'overriddenstatus' => 'UNKNOWN',
                 'port' => [
@@ -141,11 +150,12 @@ class Sidecar
                     'serviceUpTimestamp' => round(microtime(true) * 1000)
                 ],
                 'metadata' => [
-                    '@class' => ''
+                    '@class' => 'java.util.Collections$EmptyMap',
+//                    "management.port" => $this->agentParams['sidecar.serverPort']
                 ],
                 'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . '/',
                 'statusPageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . config('statusPageUrl', '/agent/info'),
-                'healthCheckUrl' => $this->agentParams['sidecar.healthUri'],
+                'healthCheckUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . $this->agentParams['sidecar.healthUri'],
                 'vipAddress' => $this->agentParams['sidecar.applicationName'],
                 'secureVipAddress' => $this->agentParams['sidecar.applicationName'],
                 'isCoordinatingDiscoveryServer' => 'false',
@@ -291,7 +301,7 @@ class Sidecar
         $http = HttpClient::getInstance();
         $option['method'] = 'GET';
         $option['uri'] = $this->agentParams['sidecar.healthUri'];
-        $option['base_uri'] = $this->agentParams['sidecar.ipAddress'];
+        $option['base_uri'] = $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'];
         $option['use_pool'] = false;
         $option['headers'] = $this->defaultHeaders;
         $result = [];
@@ -301,7 +311,6 @@ class Sidecar
             CLog::info('eureka sidecar request health uri failed: ' . $e->getMessage());
             $heartbeatParams['value'] = 'DOWN';
         }
-
         $status = $result['status'] ?? '';
         if (!is_array($result) || $status != 'UP') {
             $heartbeatParams['value'] = 'DOWN';
@@ -309,7 +318,7 @@ class Sidecar
         $result = null;
         unset($result);
 
-        $instance = gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'] . '/status';
+        $instance = substr($this->agentParams['sidecar.ipAddress'], 7) . '/status';
         $instance .= '?' . http_build_query($heartbeatParams);
         $heartbeatParams = null;
         unset($heartbeatParams);
@@ -330,7 +339,7 @@ class Sidecar
             $response = $http->request(null, $option, true, true, false);
             if ($response->getStatusCode() == 404) {
                 $this->registerAppInstance();
-                CLog::info('eureka-retry-register:' . gethostname());
+                CLog::info('eureka-retry-register:' . $this->agentParams['sidecar.ipAddress']);
             } elseif ($response->getStatusCode() != 200) {
                 return false;
             }
@@ -370,7 +379,7 @@ class Sidecar
                 foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
                     list($host, $prefix) = $namePrefix;
                     $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']) . '/' .
-                        gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'];
+                        substr($this->agentParams['sidecar.ipAddress'], 7);
                     $url = $host . $uri;
                     $isDel = $deleteStatus[$url] ?? '';
                     if (200 == $isDel) {
