@@ -7,9 +7,11 @@ use Sidecar\Constant\SidecarConstant;
 use Sidecar\Exception\SidecarException;
 use Sidecar\Util\SidecarTable;
 use Sidecar\Http\HttpClient;
-use Swlib\Http\ContentType;
 use Swoft\Bean\Annotation\Mapping\Bean;
+use Swoft\Bean\BeanFactory;
+use Swoft\Http\Message\ContentType;
 use Swoft\Log\Helper\CLog;
+use Swoft\Log\Helper\Log;
 use Swoole\Table;
 
 /**
@@ -31,12 +33,10 @@ class Sidecar
      */
     private $defaultHeaders = [
         'Accept' => ContentType::JSON,
-        'User-Agent' => 'php-eureka-agent' . '(' . SidecarConstant::SIDECAR_VERSION . ')',
         'Content-Type' => ContentType::JSON
     ];
 
     /**
-     * 初始化时间
      * @var int
      */
     private $lastDirtyTimestamp = 0;
@@ -48,9 +48,25 @@ class Sidecar
     private $appInstance = [];
 
     /**
+     * swoole table 存储拉取的实例信息
      * @var Table
      */
     private $sidecarTable = null;
+
+    /**
+     * @var HttpClient
+     */
+    private $httpClient = null;
+
+    /**
+     * @var null
+     */
+    private $instanceId = null;
+
+    /**
+     * @var string
+     */
+    private $instanceStatus = 'UP';
 
     /**
      * @throws SidecarException
@@ -61,6 +77,7 @@ class Sidecar
     {
         $this->initEurekaParams();
         $this->sidecarTable = SidecarTable::getInstance();
+        $this->httpClient = BeanFactory::getBean('eurekaHttpClient');
     }
 
     /**
@@ -72,16 +89,16 @@ class Sidecar
     {
         $eurekaUrls = explode(',', config('sidecar.eurekaUrls'));
         if (empty($eurekaUrls[0])) {
-            throw new SidecarException('sidecar.eurekaUrls is needed,like: http://127.0.0.1:1111/eureka/,http://127.0.0.1:1112/eureka/');
+            throw new SidecarException('sidecar.eurekaUrls is needed,like: http://127.0.0.1:8671/eureka/,http://127.0.0.1:8672/eureka/');
         }
         foreach ($eurekaUrls as $eurekaUrl) {
             $parseUrl = parse_url($eurekaUrl);
             $scheme = $parseUrl['scheme'] ?? 'http';
             $port = $parseUrl['port'] ?? '';
             $port = $port ?: ('http' == $scheme ? '80' : '443');
-            $name = $scheme . '://' . $parseUrl['host'] . ':' . $port;
+            $host = $parseUrl['host'];
             $prefix = rtrim($parseUrl['path'], '/');
-            $this->agentParams['sidecar.eurekaUrls'][] = [$name, $prefix];
+            $this->agentParams['sidecar.eurekaUrls'][] = [$host, $prefix, $port];
         }
 
         if (!config('sidecar.serverPort', '')) {
@@ -101,14 +118,14 @@ class Sidecar
 
         $ipAddress = config('sidecar.ipAddress', '');
         if (!$ipAddress) {
-            $hostKey = str_replace('-', '_', $this->agentParams['sidecar.applicationName']) . '_SERVICE_HOST';
-            $ipAddress = getenv(strtoupper($hostKey));
+            $ips = swoole_get_local_ip();
+            $ipAddress = $ips['eth0'] ?? '';
             if (!$ipAddress) {
-                $ips = swoole_get_local_ip();
-                $ipAddress = $ips['eth0'] ?? '';
+                $hostKey = str_replace('-', '_', $this->agentParams['sidecar.applicationName']) . '_SERVICE_HOST';
+                $ipAddress = getenv(strtoupper($hostKey));
             }
             if (!$ipAddress) {
-                throw new SidecarException('get eth0\'s ip failed, sidecar.ipAddress is needed');
+                throw new SidecarException('get ip failed, sidecar.ipAddress is needed');
             }
         }
         if (false === strpos($ipAddress, 'http://')) {
@@ -123,10 +140,12 @@ class Sidecar
 
         $this->lastDirtyTimestamp = (string)round(microtime(true) * 1000);
 
+        $this->instanceId = $this->agentParams['sidecar.applicationName'] . ':' .
+            substr($this->agentParams['sidecar.ipAddress'], 7) . ':' . $this->agentParams['sidecar.serverPort'];
+
         $this->appInstance = [
             'instance' =>[
-                'instanceId' => gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'],
-//                'hostName' => gethostname() . ':' . $this->agentParams['sidecar.applicationName'] . ':' . $this->agentParams['sidecar.serverPort'],
+                'instanceId' => $this->instanceId,
                 'hostName' => substr($this->agentParams['sidecar.ipAddress'], 7),
                 'app' => strtoupper($this->agentParams['sidecar.applicationName']),
                 'ipAddr' => substr($this->agentParams['sidecar.ipAddress'], 7),
@@ -154,12 +173,12 @@ class Sidecar
                     'serviceUpTimestamp' => round(microtime(true) * 1000)
                 ],
                 'metadata' => [
-                    '@class' => 'java.util.Collections$EmptyMap',
-//                    "management.port" => $this->agentParams['sidecar.serverPort']
+                    //'@class' => 'java.util.Collections$EmptyMap',
+                    "management.port" => $this->agentParams['sidecar.serverPort']
                 ],
                 'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . '/',
                 'statusPageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . config('statusPageUrl', '/agent/info'),
-                'healthCheckUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . $this->agentParams['sidecar.healthUri'],
+                'healthCheckUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . $this->agentParams['sidecar.healthUri'],
                 'vipAddress' => $this->agentParams['sidecar.applicationName'],
                 'secureVipAddress' => $this->agentParams['sidecar.applicationName'],
                 'isCoordinatingDiscoveryServer' => 'false',
@@ -170,60 +189,55 @@ class Sidecar
     }
 
     /**
-     * 注册服务
+     * @throws SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public function registerAppInstance()
+    public function registerInstance()
     {
         $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
             return;
         }
 
+        $headers = array_merge([
+            'Accept-Encoding' => 'gzip',
+            'DiscoveryIdentity-Name' => 'DefaultClient',
+            'DiscoveryIdentity-Version' => '1.4',
+            'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress']
+        ], $this->defaultHeaders);
         foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
-            list($host, $prefix) = $namePrefix;
-            $headers = array_merge([
-                'Accept-Encoding' => 'gzip',
-                'DiscoveryIdentity-Name' => 'DefaultClient',
-                'DiscoveryIdentity-Version' => '1.4',
-                'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress'],
-                'Connection' => 'Keep-Alive'
-            ], $this->defaultHeaders);
-
+            list($option['base_uri'], $prefix, $option['port']) = $namePrefix;
             $option['headers'] = $headers;
-            $option['base_uri'] = $host;
-            $option['method'] = 'POST';
-            $option['uri'] = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']);
-            $option['use_pool'] = false;
-            $data = json_encode($this->appInstance, JSON_UNESCAPED_SLASHES);
+            $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']);
+            $option['body'] = json_encode($this->appInstance, JSON_UNESCAPED_SLASHES);
 
-            go(function () use ($data, $option) {
-                $client = HttpClient::getInstance();
-                $response = $client->request($data, $option, true, true, false);
-                if ($response->getStatusCode() == 204) {
-                    CLog::info('eureka-register: success');
-                } else {
-                    CLog::info('eureka-register: failed');
-                }
-                $data = null;
-                $option = null;
-                unset($data, $option);
-            });
+            try {
+                $result = $this->httpClient->post($uri, $option);
+            } catch (SidecarException $e) {
+                Log::error('register instance exception occured: ' . $e->getMessage());
+                CLog::info('eureka ' . $option['base_uri'] . ':' . $option['port'] . ' register: failed!');
+                $this->instanceStatus = 'DOWN';
+                return;
+            }
 
-            $headers = null;
-            unset($headers);
+            if (204 == $result->getStatusCode()) {
+                $this->pullInstances();
+                CLog::info('eureka ' . $option['base_uri'] . ':' . $option['port'] . ' register: success!');
+            } else {
+                CLog::info('eureka ' . $option['base_uri'] . ':' . $option['port'] . ' register: failed!');
+            }
         }
         return;
     }
 
     /**
-     * 全量拉取服务
      * @return bool
+     * @throws SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public function pullAllApplications()
+    public function pullInstances()
     {
         $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
@@ -232,139 +246,130 @@ class Sidecar
 
         $lastVersion = $this->sidecarTable->get(SidecarConstant::DELTA_VERSION, SidecarConstant::SIDECAR_INFO);
         $randKey = array_rand($this->agentParams['sidecar.eurekaUrls']);
-        list($host, $prefix) = $this->agentParams['sidecar.eurekaUrls'][$randKey];
-
-        $http = HttpClient::getInstance();
-        $option['method'] = 'GET';
-        $option['base_uri'] = $host;
-        $option['uri'] = $prefix . '/apps/delta';
-        $option['use_pool'] = false;
+        list($option['base_uri'], $prefix, $option['port']) = $this->agentParams['sidecar.eurekaUrls'][$randKey];
+        
+        $uri = $prefix . '/apps/delta';
         $option['headers'] = $this->defaultHeaders;
-        $result = $http->request(null, $option, false, false, false);
+        try {
+            $result = $this->httpClient->get($uri, $option)->getResult();
+        } catch (SidecarException $e) {
+            Log::error('versions__delta exception occured: ' . $e->getMessage());
+        }
 
         $version = $result['applications']['versions__delta'] ?? '';
         if ($lastVersion && $lastVersion == $version) {
             return true;
         }
         $lastVersion = $version;
-        $result = null;
-        unset($result);
 
-        $option['uri'] = $prefix . '/apps';
-        $result = $http->request(null, $option, false, false, false);
-
+        $uri = $prefix . '/apps';
+        try {
+            $result = $this->httpClient->get($uri, $option)->getResult();
+        } catch (SidecarException $e) {
+            Log::error('pull instances exception occured: ' . $e->getMessage());
+        }
+        
         if (!is_array($result)) {
-            $result =null;
-            unset($result);
             return false;
         }
 
         $applicationsKeys = [];
         $applications = $result['applications']['application'] ?? [];
         if (isset($applications['instance']) && isset($applications['name'])) {
-            $key = SidecarConstant::APP_PREFIX . md5(strtoupper($applications['name']));
+            // 兼容老版本只有一个实例时返回格式不一致问题
+            $key = SidecarConstant::SIDECAR_KEYS_PREFIX . md5(strtoupper($applications['name']));
             $applicationsKeys[] = $key;
             $this->sidecarTable->set($key, [SidecarConstant::SIDECAR_INFO => json_encode($applications['instance'])]);
         } else {
             foreach ($applications as $app) {
-                $key = SidecarConstant::APP_PREFIX . md5(strtoupper($app['name']));
+                $key = SidecarConstant::SIDECAR_KEYS_PREFIX . md5(strtoupper($app['name']));
                 $applicationsKeys[] = $key;
                 $this->sidecarTable->set($key, [SidecarConstant::SIDECAR_INFO => json_encode($app['instance'])]);
             }
         }
-        $this->sidecarTable->set(SidecarConstant::EUREKA_APP_KEYS, [SidecarConstant::SIDECAR_INFO => json_encode($applicationsKeys)]);
-        $result = null;
-        unset($result);
-        $applicationsKeys = null;
-        unset($applicationsKeys);
+        $this->sidecarTable->set(SidecarConstant::SIDECAR_KEYS, [SidecarConstant::SIDECAR_INFO => json_encode($applicationsKeys)]);
         $this->sidecarTable->set(SidecarConstant::DELTA_VERSION, [SidecarConstant::SIDECAR_INFO => $lastVersion]);
         return true;
     }
 
     /**
-     * 与注册中心保持心跳
      * @return bool
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public function applicationInstanceHeartbeat()
+    public function heartbeat()
     {
         $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
             return true;
         }
 
-        $randKey = array_rand($this->agentParams['sidecar.eurekaUrls']);
-        list($host, $prefix) = $this->agentParams['sidecar.eurekaUrls'][$randKey];
-
+        $uri = $this->agentParams['sidecar.healthUri'];
+        $option['base_uri'] = substr($this->agentParams['sidecar.ipAddress'], 7);
+        $option['port'] = $this->agentParams['sidecar.port'];
+        $option['headers'] = $this->defaultHeaders;
         $heartbeatParams = [
             'value' => 'UP',
-            'lastDirtyTimestamp' => $this->lastDirtyTimestamp
+            'lastDirtyTimestamp' => $this->lastDirtyTimestamp,
         ];
-
-        $http = HttpClient::getInstance();
-        $option['method'] = 'GET';
-        $option['uri'] = $this->agentParams['sidecar.healthUri'];
-        $option['base_uri'] = $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'];
-        $option['use_pool'] = false;
-        $option['headers'] = $this->defaultHeaders;
         $result = [];
         try {
-            $result = $http->request(null, $option, false, false, false);
+            $result = $this->httpClient->get($uri, $option)->getResult();
         } catch (\Exception $e) {
-            CLog::info('eureka sidecar request health uri failed: ' . $e->getMessage());
+            Log::info('eureka sidecar request health uri failed: ' . $e->getMessage());
             $heartbeatParams['value'] = 'DOWN';
         }
         $status = $result['status'] ?? '';
         if (!is_array($result) || $status != 'UP') {
             $heartbeatParams['value'] = 'DOWN';
         }
-        $result = null;
-        unset($result);
 
-        $instance = substr($this->agentParams['sidecar.ipAddress'], 7) . '/status';
-        $instance .= '?' . http_build_query($heartbeatParams);
-        $heartbeatParams = null;
-        unset($heartbeatParams);
+        if ('UP' == $heartbeatParams['value'] && 'UP' == $this->instanceStatus) {
+            $heartbeatParams['status'] = 'UP';
+            unset($heartbeatParams['value']);
+            $instance = $this->instanceId . '?' . http_build_query($heartbeatParams);
+        } elseif ('UP' == $heartbeatParams['value'] && 'DOWN' == $this->instanceStatus) {
+            $instance = $this->instanceId . '/status' . '?' . http_build_query($heartbeatParams);
+            $this->instanceStatus = 'UP';
+        } elseif ('DOWN' == $heartbeatParams['value'] && 'UP' == $this->instanceStatus) {
+            $instance = $this->instanceId . '/status' . '?' . http_build_query($heartbeatParams);
+            $this->instanceStatus = 'DOWN';
+        } elseif ('DOWN' == $heartbeatParams['value'] && 'DOWN' == $this->instanceStatus) {
+            $instance = $this->instanceId . '/status' . '?' . http_build_query($heartbeatParams);
+        }
 
         $headers = array_merge([
             'Accept-Encoding' => 'gzip',
             'DiscoveryIdentity-Name' => 'DefaultClient',
             'DiscoveryIdentity-Version' => '1.4',
-            'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress'],
-            'Connection' => 'Keep-Alive'
+            'DiscoveryIdentity-Id' => substr($this->agentParams['sidecar.ipAddress'], 7)
         ], $this->defaultHeaders);
 
-        $option['method'] = 'PUT';
-        $option['uri'] = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']) . '/' . $instance;
-        $option['base_uri'] = $host;
+        $randKey = array_rand($this->agentParams['sidecar.eurekaUrls']);
+        list($option['base_uri'], $prefix, $option['port']) = $this->agentParams['sidecar.eurekaUrls'][$randKey];
+        $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']) . '/' . $instance;
         $option['headers'] = $headers;
         try {
-            $response = $http->request(null, $option, true, true, false);
+            $response = $this->httpClient->put($uri, $option);
             if ($response->getStatusCode() == 404) {
-                $this->registerAppInstance();
-                CLog::info('eureka-retry-register:' . $this->agentParams['sidecar.ipAddress']);
+                $this->registerInstance();
+                Log::info('eureka retry register:' . $this->agentParams['sidecar.ipAddress']);
             } elseif ($response->getStatusCode() != 200) {
                 return false;
             }
         } catch (\Exception $e) {
-            CLog::info('eureka sidecar request eureka server failed: ' . $e->getMessage());
+            Log::info('update heartbeat failed: ' . $e->getMessage());
+            $this->instanceStatus = 'DOWN';
         }
-        $headers = null;
-        $option = null;
-        unset($headers, $option);
 
-        $this->appInstance['instance']['leaseInfo']['lastRenewalTimestamp'] = round(microtime(true) * 1000);
-        $this->sidecarTable->set(SidecarConstant::SYS_CACHE_APP_LAST_RENEW, [SidecarConstant::SIDECAR_INFO => $this->appInstance['instance']['leaseInfo']['lastRenewalTimestamp']]);
         return true;
     }
 
     /**
-     * 关服时移除注册中心
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public function unregisterAppInstance(): void
+    public function unregisterInstance(): void
     {
         $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
@@ -375,30 +380,25 @@ class Sidecar
         $count = 0;
         $deleteStatus = [];
         while ($flag) {
-            try {
-                if ($count > 10) {
-                    break;
+            if ($count > 10) {
+                Log::error('unregister eureka falied: ' . json_encode($deleteStatus));
+                break;
+            }
+            $count++;
+            foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
+                list($option['base_uri'], $prefix, $option['port']) = $namePrefix;
+                $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']) . '/' . $this->instanceId;
+                $isDel = $deleteStatus[$option['base_uri']] ?? '';
+                if (200 == $isDel) {
+                    continue;
                 }
-                $count++;
-                foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
-                    list($host, $prefix) = $namePrefix;
-                    $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']) . '/' .
-                        substr($this->agentParams['sidecar.ipAddress'], 7);
-                    $url = $host . $uri;
-                    $isDel = $deleteStatus[$url] ?? '';
-                    if (200 == $isDel) {
-                        continue;
-                    }
-                    $status = $this->curlGetStatusCode($url, $this->defaultHeaders);
-                    if (200 == $status) {
-                        $deleteStatus[$url] = $status;
-                    }
+                $status = $this->httpClient->delete($uri, $option)->getStatusCode();
+                if (200 == $status) {
+                    $deleteStatus[$option['base_uri']] = $status;
                 }
-                if (count($deleteStatus) == count($this->agentParams['sidecar.eurekaUrls'])) {
-                    $flag = false;
-                }
-            } catch (\Throwable $e) {
-                CLog::info($e);
+            }
+            if (count($deleteStatus) == count($this->agentParams['sidecar.eurekaUrls'])) {
+                $flag = false;
             }
         }
     }
@@ -410,37 +410,5 @@ class Sidecar
     public function getInstance()
     {
         return $this->appInstance;
-    }
-
-    /**
-     * onShutDown专用curl
-     * @param $url
-     * @param $headers
-     * @return mixed
-     */
-    private function curlGetStatusCode($url, $headers)
-    {
-        $curl = curl_init();
-        curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, FALSE);
-        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, FALSE);
-
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'DELETE');
-
-        curl_setopt($curl, CURLINFO_HEADER_OUT, TRUE);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
-
-        curl_setopt($curl, CURLOPT_HEADER, true);
-        curl_setopt($curl, CURLOPT_NOBODY, true);
-
-        curl_exec($curl);
-
-        //响应码
-        $statusCode = curl_getinfo($curl,CURLINFO_HTTP_CODE);
-
-        curl_close($curl);
-
-        return $statusCode;
     }
 }

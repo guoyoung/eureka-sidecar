@@ -17,13 +17,12 @@ interface AgentInterface
     public function applications();
 
     /**
-     * @param $appName          服务名
-     * @param $uri              uri
-     * @param string $method    请求方式
-     * @param array $data       请求数据
-     * @param array $option     option配置，同saber
-     * @param bool $isRaw       是否返回原始saber请求数据
+     * @param $appName          
+     * @param $uri              
+     * @param string $method    
+     * @param array $data       
+     * @param array $option     
      * @return mixed
      */
-    public function proxy($appName, $uri, $method = 'GET', $data = [], $option = [], $isRaw = false);
+    public function proxy($appName, $uri, $method = 'GET', $data = [], $option = []);
 }

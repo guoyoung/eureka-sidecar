@@ -23,7 +23,7 @@ class SidecarTable
      */
     public static function getInstance()
     {
-        self::$instance || self::$instance = new Table(1024);
+        self::$instance || self::$instance = new Table(config('sidecar.sidecarTable', 1024));
         return self::$instance;
     }
 }

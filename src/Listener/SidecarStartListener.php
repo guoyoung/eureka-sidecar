@@ -3,14 +3,14 @@
 
 namespace Sidecar\Listener;
 
-use Sidecar\Bean\Sidecar;
 use Sidecar\Constant\SidecarConstant;
+use Sidecar\Sidecar;
 use Sidecar\Util\SidecarTable;
 use Swoft\Bean\BeanFactory;
 use Swoft\Event\Annotation\Mapping\Listener;
 use Swoft\Event\EventHandlerInterface;
 use Swoft\Event\EventInterface;
-use Swoft\Server\Swoole\SwooleEvent;
+use Swoft\Server\SwooleEvent;
 use Swoole\Table;
 
 /**
@@ -21,8 +21,6 @@ use Swoole\Table;
 class SidecarStartListener implements EventHandlerInterface
 {
     /**
-     * 初始化sidecar table
-     * SidecarStartListener constructor.
      * SidecarStartListener constructor.
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
@@ -31,7 +29,7 @@ class SidecarStartListener implements EventHandlerInterface
     {
         if (config('sidecar.enable', false)) {
             $table = SidecarTable::getInstance();
-            $table->column(SidecarConstant::SIDECAR_INFO, Table::TYPE_STRING, config('sidecarTableMaxLength', 8096));
+            $table->column(SidecarConstant::SIDECAR_INFO, Table::TYPE_STRING, config('sidecarTableMaxLength', 4096));
             $table->create();
         }
     }
@@ -39,6 +37,7 @@ class SidecarStartListener implements EventHandlerInterface
     /**
      * @param EventInterface $event
      * @throws \ReflectionException
+     * @throws \Sidecar\Exception\SidecarException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
     public function handle(EventInterface $event): void
@@ -49,7 +48,7 @@ class SidecarStartListener implements EventHandlerInterface
              * @var $sidecar Sidecar
              */
             $sidecar = BeanFactory::getBean('sidecar');
-            $sidecar->registerAppInstance();
+            $sidecar->registerInstance();
         }
     }
 }

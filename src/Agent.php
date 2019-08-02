@@ -10,11 +10,6 @@ use Sidecar\Util\SidecarRequest;
 use Sidecar\Util\SidecarTable;
 use Swoft\Bean\Annotation\Mapping\Bean;
 use Swoft\Bean\BeanFactory;
-use Swoft\Context\Context;
-use Swoft\Http\Message\ContentType;
-use Swoft\Http\Server\Annotation\Mapping\Controller;
-use Swoft\Http\Server\Annotation\Mapping\RequestMapping;
-use Swoft\Http\Server\Annotation\Mapping\RequestMethod;
 
 /**
  * Class Agent
@@ -24,7 +19,7 @@ use Swoft\Http\Server\Annotation\Mapping\RequestMethod;
 class Agent implements AgentInterface
 {
     /**
-     * @return array
+     * @return array|mixed
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
@@ -40,8 +35,7 @@ class Agent implements AgentInterface
             'app' => $appInstance['instance']['app'] ?? '',
             'ipAddr' => $appInstance['instance']['ipAddr'] ?? '',
             'status' => $appInstance['instance']['status'] ?? '',
-            'port' => $appInstance['instance']['port']['$'] ?? '',
-            'version' => SidecarConstant::SIDECAR_VERSION,
+            'port' => $appInstance['instance']['port']['$'] ?? ''
         ];
     }
 
@@ -51,7 +45,7 @@ class Agent implements AgentInterface
     public function applications()
     {
         $table = SidecarTable::getInstance();
-        $keys = json_decode($table->get(SidecarConstant::EUREKA_APP_KEYS, SidecarConstant::SIDECAR_INFO), true);
+        $keys = json_decode($table->get(SidecarConstant::SIDECAR_KEYS, SidecarConstant::SIDECAR_INFO), true);
         $keys = $keys ?: [];
         $instances = [];
         foreach ($keys as $instanceKey) {
@@ -69,14 +63,13 @@ class Agent implements AgentInterface
      * @param string $method
      * @param array $data
      * @param array $option
-     * @param bool $isRaw
-     * @return array|bool|mixed|\Swlib\Saber\Request|\Swlib\Saber\Response
+     * @return mixed|Http\Response
      * @throws Exception\SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public function proxy($appName, $uri, $method = 'GET', $data = [], $option = [], $isRaw = false)
+    public function proxy($appName, $uri, $method = 'GET', $data = [], $option = [])
     {
-        return SidecarRequest::call($appName, $uri, $method, $data, $option, $isRaw);
+        return SidecarRequest::getInstance()->call($appName, $uri, $method, $data, $option);
     }
 }

@@ -11,11 +11,9 @@ class SidecarConstant
 {
     const DELTA_VERSION = 'version__delta';
 
-    const APP_PREFIX = 'EUREKA_APP';
+    const SIDECAR_KEYS_PREFIX = 'eureka_sidecar';
 
-    const EUREKA_APP_KEYS = 'EUREKA_APPS';
-
-    const SYS_CACHE_APP_LAST_RENEW = 'lastRenewalTimestamp';
+    const SIDECAR_KEYS = 'eureka_sidecar_keys';
 
     const SIDECAR_VERSION = '1.0';
 

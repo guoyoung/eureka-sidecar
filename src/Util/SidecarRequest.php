@@ -6,24 +6,59 @@ namespace Sidecar\Util;
 use Sidecar\Constant\SidecarConstant;
 use Sidecar\Exception\SidecarException;
 use Sidecar\Http\HttpClient;
+use Sidecar\Http\Response;
+use Swoft\Bean\BeanFactory;
 
 class SidecarRequest
 {
+    /**
+     * @var array 
+     */
+    private $allowMethod = [
+        'get',
+        'head',
+        'delete',
+        'put',
+        'patch',
+        'post',
+        'options'
+    ];
+
+    /**
+     * @var SidecarRequest
+     */
+    private static $instance = null;
+
+    private function __clone(){}
+
+    private function __construct(){}
+
+    /**
+     * @return SidecarRequest
+     */
+    public static function getInstance()
+    {
+        self::$instance || self::$instance = new self();
+        return self::$instance;
+    }
+
     /**
      * @param $appName
      * @param $uri
      * @param string $method
      * @param array $data
      * @param array $option
-     * @param bool $isRaw
-     * @return array|bool|\Swlib\Saber\Request|\Swlib\Saber\Response
+     * @return Response
      * @throws SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public static function call($appName, $uri, $method = 'GET', $data = [], $option = [], $isRaw = false)
+    public function call($appName, $uri, $method = 'GET', $data = [], $option = [])
     {
-        $instance = self::getUsableInstance($appName);
+        if (!config('sidecar.enable', false)) {
+            throw new SidecarException('eureka is unabled');
+        }
+        $instance = $this->getUsableInstance($appName);
         if (false == $instance) {
             throw new SidecarException('no usable instance');
         }
@@ -47,18 +82,27 @@ class SidecarRequest
             throw new SidecarException('instance host error');
         }
 
-        $option['base_uri'] = (strpos($host, 'http') !== false) ? $host . ':' . $port : $schema . $host . ':' . $port;
-        $option['method'] = strtoupper($method);
-        if ('GET' == $option['method']) {
+        $option['base_uri'] = $host;
+        $option['port'] = $port;
+        $method = strtolower($method);
+        if (!in_array($method, $this->allowMethod)) {
+            throw new SidecarException('method not allowed');
+        }
+        if ('get' == $method) {
             if (!empty($data)) {
-                $uri .= '?' . http_build_query($data);
+                $option['query'] = $data;
                 $data = [];
             }
         }
-        $option['uri'] = $uri;
-        $data && $option['data'] = json_encode($data);
-        $http = HttpClient::getInstance();
-        $result = $http->request(null, $option, false, $isRaw);
+        $data && $option['body'] = json_encode($data);
+        /**
+         * @var $http HttpClient
+         */
+        $http = BeanFactory::getBean('eurekaHttpClient');
+        /**
+         * @var $result Response
+         */
+        $result = $http->$method($uri, $option);
         return $result;
     }
 
@@ -67,10 +111,10 @@ class SidecarRequest
      * @param $name
      * @return bool|mixed
      */
-    private static function getUsableInstance($name)
+    private function getUsableInstance($name)
     {
         $table = SidecarTable::getInstance();
-        $instanceKey = SidecarConstant::APP_PREFIX . md5(strtoupper($name));
+        $instanceKey = SidecarConstant::SIDECAR_KEYS_PREFIX . md5(strtoupper($name));
         $app = json_decode($table->get($instanceKey, SidecarConstant::SIDECAR_INFO), true);
         if (empty($app)) {
             return false;
@@ -80,7 +124,8 @@ class SidecarRequest
         }
         shuffle($app);
         foreach ($app as $instance) {
-            if ('UP' == $instance['status']) {
+            $status = $instance['status'] ?? 'DOWN';
+            if ('UP' == $status) {
                 return $instance;
             }
         }

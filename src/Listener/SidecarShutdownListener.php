@@ -3,12 +3,13 @@
 
 namespace Sidecar\Listener;
 
-use Sidecar\Bean\Sidecar;
+use Sidecar\Sidecar;
 use Swoft\Bean\BeanFactory;
 use Swoft\Event\Annotation\Mapping\Listener;
 use Swoft\Event\EventHandlerInterface;
 use Swoft\Event\EventInterface;
-use Swoft\Server\Swoole\SwooleEvent;
+use Swoft\Server\SwooleEvent;
+use Swoole\Timer;
 
 /**
  * Class SidecarShutdownListener
@@ -25,12 +26,13 @@ class SidecarShutdownListener implements EventHandlerInterface
     public function handle(EventInterface $event): void
     {
         if (config('sidecar.enable', false)) {
+            Timer::clearAll();
             // 注销服务
             /**
              * @var $bean Sidecar
              */
             $bean = BeanFactory::getBean('sidecar');
-            $bean->unregisterAppInstance();
+            $bean->unregisterInstance();
         }
     }
 }

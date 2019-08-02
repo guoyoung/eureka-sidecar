@@ -3,142 +3,195 @@
 
 namespace Sidecar\Http;
 
-use Swlib\Http\ContentType;
-use Swlib\Http\Exception\HttpExceptionMask;
-use Swlib\Saber;
-use Swoft\Log\Helper\CLog;
+use Sidecar\Exception\SidecarException;
+use Swoft\Bean\Annotation\Mapping\Bean;
+use Swoft\Http\Message\ContentType;
 use Swoft\Log\Helper\Log;
+use Swoft\Stdlib\Helper\JsonHelper;
+use Swoole\Coroutine\Http\Client;
 
 /**
- * 使用说明：
- * 只允许通过getInstance获取httpClient对象，request单个请求，multi并发请求
- * 配置说明：
-| base_uri              | string                | 基础路径           如：http://127.0.0.1:8081
-| uri                   | string                | 资源标识符         如：/service/dispatch?node=1001000
-| method                | string                | 请求方法           如：GET
-| headers               | array                 | 请求报头
-| cookies               | `array`|`string`      |
-| useragent             | string                | 用户代理
-| referer               | string                | 来源地址
-| redirect              | int                   | 最大重定向次数
-| keep_alive            | bool                  | 是否保持连接
-| content_type          | string                | 发送的内容编码类型
-| data                  | `array`  | `string`   | 发送的数据
-| before                | `callable`  | `array` | 请求前拦截器
-| after                 | `callable`  | `array` | 响应后拦截器
-| before_redirect       | `callable`  | `array` | 重定向后拦截器
-| timeout               | float                 | 超时时间
-| proxy                 | string                | 代理
-| ssl                   | int                   | 是否开启ssl连接
-| cafile                | string                | ca文件
-| ssl_verify_peer       | bool                  | 验证服务器端证书
-| ssl_allow_self_signed | bool                  | 允许自签名证书
-| iconv                 | array                 | 指定编码转换
-| exception_report      | int                   | 异常报告级别
-| exception_handle      | callable\|array       | 异常自定义处理函数
-| retry                 | callable              | 自动重试拦截器
-| retry_time            | int                   | 自动重试次数
-| use_pool              | bool\|int             | 连接池
  * Class HttpClient
- * @author gyy
- * @package App\Utils\Http
+ * @package Sidecar\Http
+ * @Bean("eurekaHttpClient")
  */
 class HttpClient
 {
-    private static $instance = null;
-    
-    private $timeout = 10;
-    
-    private $usePool = false;
-
-    private function __construct(){}
-
-    private function __clone(){}
-
     /**
-     * 单例获取
-     * @return HttpClient|null
+     * Seconds
+     *
+     * @var int
      */
-    public static function getInstance()
-    {
-        self::$instance || self::$instance = new static();
-        return self::$instance;
-    }
+    private $timeout = 3;
 
     /**
-     * 单个请求
-     * 默认content-type: application/json
-     * 默认超时60s
-     * @param null $data 请求数据
-     * @param array $options 请求设置
-     * @param bool $isCLog
-     * @param bool $isRaw
-     * @param $isLog
-     * @return bool|Saber\Request|Saber\Response|array
+     * @param string|null $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
      * @throws \ReflectionException
      * @throws \Swoft\Bean\Exception\ContainerException
      */
-    public function request($data = null, $options = [], $isCLog = false, $isRaw = false, $isLog = true)
+    public function get(string $url = null, array $options = []): Response
     {
-        if (!$options['base_uri'] || !$options['uri']) {
-            return false;
+        return $this->request('GET', $url, $options);
+    }
+
+    /**
+     * @param string $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    public function head(string $url, array $options = []): Response
+    {
+        return $this->request('HEAD', $url, $options);
+    }
+
+    /**
+     * @param string $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    public function delete(string $url, array $options = []): Response
+    {
+        return $this->request('DELETE', $url, $options);
+    }
+
+    /**
+     * @param string $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    public function put(string $url, array $options = []): Response
+    {
+        return $this->request('PUT', $url, $options);
+    }
+
+    /**
+     * @param string $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    public function patch(string $url, array $options = []): Response
+    {
+        return $this->request('PATCH', $url, $options);
+    }
+
+    /**
+     * @param string $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    public function post(string $url, array $options = []): Response
+    {
+        return $this->request('POST', $url, $options);
+    }
+
+    /**
+     * @param string $url
+     * @param array $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    public function options(string $url, array $options = []): Response
+    {
+        return $this->request('OPTIONS', $url, $options);
+    }
+
+    /**
+     * @param $method
+     * @param $uri
+     * @param $options
+     * @return Response
+     * @throws SidecarException
+     * @throws \ReflectionException
+     * @throws \Swoft\Bean\Exception\ContainerException
+     */
+    private function request($method, $uri, $options): Response
+    {
+        $host = $options['base_uri'] ?? '';
+        $port = $options['port'] ?? '';
+        if (!$host || !$port) {
+            throw new SidecarException('base_uri or port is needed');   
+        }
+        
+        $body = $options['body'] ?? '';
+        if (is_array($body)) {
+            $body = JsonHelper::encode($body, JSON_UNESCAPED_UNICODE);
         }
 
-        $saber = Saber::create();
-        $saber->exceptionReport(HttpExceptionMask::E_ALL);
-        $uri = $options['uri'] ?? '';
-        $saber->exceptionHandle(function (\Exception $e) use ($uri, $isCLog, $isLog) {
-            if ($isLog) {
-                $isCLog ? CLog::error('request ' . $uri . '\'s exception' . get_class($e) . ' occurred, exception message: ' . $e->getMessage())
-                    : Log::pushLog('[request ' . $uri . '\'s exception' . get_class($e) . ' occurred, exception message]', $e->getMessage());
+        $query = $options['query'] ?? [];
+        if (!empty($query)) {
+            $query = http_build_query($query);
+            $uri   = sprintf('%s?%s', $uri, $query);
+        }
+
+        $requestHeaders = $options['headers'] ?? [];
+        if (!isset($requestHeaders['Accept'])) {
+            $requestHeaders['Accept'] = ContentType::JSON;
+        }
+        if (!isset($requestHeaders['Accept'])) {
+            $requestHeaders['Content-Type'] = ContentType::JSON;
+        }
+
+        $option = $options['option'] ?? [];
+        if (!isset($option['timeout'])) {
+            $option['timeout'] = $this->timeout;
+        }
+        
+        Log::Debug('Requesting %s %s %s', $method, $uri, JsonHelper::encode($options));
+
+        try {
+            Log::profileStart($uri);
+
+            // Http request
+            $client = new Client($options['base_uri'], (int)$options['port']);
+            $client->setMethod($method);
+            $client->setHeaders($requestHeaders);
+            $client->set($option);
+
+            // Set body
+            if (!empty($body)) {
+                $client->setData($body);
             }
-        });
 
-        !isset($options['method']) && $options['method'] = 'GET';
+            $client->execute($uri);
 
-        null !== $data && $options['data'] = (is_array($data) ? json_encode($data) : $data);
+            // Response
+            $headers    = $client->headers;
+            $statusCode = $client->statusCode;
+            $body       = $client->body;
 
-        if (!isset($options['content-type']) || !isset($options['headers']['content-type']) || !isset($options['headers']['Content-Type'])) {
-            $options['content-type'] = ContentType::JSON;
+            // Close
+            $client->close();
+
+            Log::profileEnd($uri);
+        } catch (\Exception $e) {
+            throw new SidecarException('client exception occured: ' . $e->getMessage());
         }
 
-        if (!isset($options['timeout'])) {
-            $options['timeout'] = $this->timeout;
+        if ($statusCode == -1 || $statusCode == -2 || $statusCode == -3) {
+            $message = sprintf('request is fail! (uri=%s status=%s body=%s).', $uri, $statusCode, $body);
+            throw new SidecarException($message);
         }
 
-        if (!isset($options['use_pool'])) {
-            $options['use_pool'] = $this->usePool;
-        }
-
-        $options['headers']['Accept'] = ContentType::JSON;
-
-        if ($isLog) {
-            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s params: ' . ($options['data'] ?? null)) :
-                Log::pushLog('[request ' . $options['uri'] . '\'s params]', ($options['data'] ?? []));
-        }
-        $response = $saber->request($options);
-        if ($isLog) {
-            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s time: ' . $response->time) :
-                Log::pushLog('[request ' . $options['uri'] . '\'s time]', $response->time);
-        }
-        $return = null;
-        if ($isRaw) {
-            $return = $response;
-        } elseif (false !== strpos($response->getHeaderLine('Content-Type'), ContentType::JSON)) {
-            $return = $response->getParsedJsonArray();
-        } elseif (false !== strpos($response->getHeaderLine('Content-Type'), ContentType::XML)) {
-            $return = $response->getParsedXmlArray();
-        } elseif (false !== strpos($response->getHeaderLine('Content-Type'), ContentType::HTML)) {
-            $return = $response->getParsedDomObject();
-        } else {
-            $return = $response;
-        }
-        if ($isLog) {
-            $isCLog ? CLog::info('request ' . $options['uri'] . '\'s result: ' . $return) :
-                Log::pushLog('[request ' . $options['uri'] . '\'s result]', $return);
-        }
-        $response = null;
-        unset($response);
-        return $return;
+        return Response::new($headers, $body, $statusCode);
     }
 }
