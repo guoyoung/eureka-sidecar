@@ -14,8 +14,7 @@
   ],
 ```
 
-提供agent bean，方法:
-- info:获取当前实例的基础信息
+提供agent bean，用于获取所有服务实例和服务调用转发:
 - application:获取所有实例信息
 - proxy:服务调用转发
 
@@ -24,14 +23,14 @@
 ```
   return [
       'enable' => true,         //是否启用
-      'eurekaUrls' => 'http://127.0.0.1:8761/eureka',       //eureka注册地址
+      'eurekaUrls' => 'http://127.0.0.1:8761/eureka',       //eureka注册地址，多个由逗号隔开
       'serverPort' => 8089,       //sidecar端口
       'port' => 8089,             //代理服务端口
       'ipAddress' => 'http://127.0.0.1',        //代理服务ip,为空则通过swoole_get_local_ip()获取本机eth0的ip
-      'healthUri' => '/health',        //代理服务需提供的心跳uri，返回格式必须为: ['status' => 'UP'], json后返回
+      'healthUri' => '/health',    //被代理服务需提供的心跳uri，返回格式必须为: ['status' => 'UP'], json后返回，默认：/health
       'applicationName' => 'sidecar-test',  //应用名称
       'sidecarTableMaxLength' => 4096,  //swoole table单个key最大储存长度
-      'pullAppTime' => 20000,  //定时拉取实例，ms
-      'healthTime' => 30000,   //定时健康检查，ms
+      'pullAppTime' => 20000,  //定时拉取实例/ms，默认20000ms
+      'healthTime' => 30000,   //定时健康检查/ms，默认30000ms
   ];
 ```

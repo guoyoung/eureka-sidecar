@@ -5,12 +5,6 @@ namespace Sidecar\Contract;
 interface AgentInterface
 {
     /**
-     * 获取当前实例信息
-     * @return mixed
-     */
-    public function info();
-
-    /**
      * 获取所有实例信息
      * @return mixed
      */

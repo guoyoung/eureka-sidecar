@@ -89,13 +89,14 @@ class Sidecar
     {
         $eurekaUrls = explode(',', config('sidecar.eurekaUrls'));
         if (empty($eurekaUrls[0])) {
-            throw new SidecarException('sidecar.eurekaUrls is needed,like: http://127.0.0.1:8671/eureka/,http://127.0.0.1:8672/eureka/');
+            throw new SidecarException('sidecar.eurekaUrls is needed,like: http://127.0.0.1:8761/eureka/,http://127.0.0.1:8762/eureka/');
         }
         foreach ($eurekaUrls as $eurekaUrl) {
+            if (false === strpos($eurekaUrl, 'http://')) {
+                $eurekaUrl = 'http://' . $eurekaUrl;
+            }
             $parseUrl = parse_url($eurekaUrl);
-            $scheme = $parseUrl['scheme'] ?? 'http';
-            $port = $parseUrl['port'] ?? '';
-            $port = $port ?: ('http' == $scheme ? '80' : '443');
+            $port = $parseUrl['port'] ?? 8761;
             $host = $parseUrl['host'];
             $prefix = rtrim($parseUrl['path'], '/');
             $this->agentParams['sidecar.eurekaUrls'][] = [$host, $prefix, $port];
@@ -132,13 +133,10 @@ class Sidecar
             $ipAddress = 'http://' . $ipAddress;
         }
         $this->agentParams['sidecar.ipAddress'] = $ipAddress;
+        
+        $this->agentParams['sidecar.healthUri'] = config('sidecar.healthUri', '/health');
 
-        if (!config('sidecar.healthUri', '')) {
-            throw new SidecarException('sidecar.healthUri is needed');
-        }
-        $this->agentParams['sidecar.healthUri'] = config('sidecar.healthUri');
-
-        $this->lastDirtyTimestamp = (string)round(microtime(true) * 1000);
+        $this->lastDirtyTimestamp = round(microtime(true) * 1000);
 
         $this->instanceId = $this->agentParams['sidecar.applicationName'] . ':' .
             substr($this->agentParams['sidecar.ipAddress'], 7) . ':' . $this->agentParams['sidecar.serverPort'];
@@ -173,7 +171,6 @@ class Sidecar
                     'serviceUpTimestamp' => round(microtime(true) * 1000)
                 ],
                 'metadata' => [
-                    //'@class' => 'java.util.Collections$EmptyMap',
                     "management.port" => $this->agentParams['sidecar.serverPort']
                 ],
                 'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . '/',
@@ -182,7 +179,7 @@ class Sidecar
                 'vipAddress' => $this->agentParams['sidecar.applicationName'],
                 'secureVipAddress' => $this->agentParams['sidecar.applicationName'],
                 'isCoordinatingDiscoveryServer' => 'false',
-                'lastUpdatedTimestamp' => (string)(round(microtime(true) * 1000)),
+                'lastUpdatedTimestamp' => round(microtime(true) * 1000),
                 'lastDirtyTimestamp' => $this->lastDirtyTimestamp
             ]
         ];
@@ -206,8 +203,8 @@ class Sidecar
             'DiscoveryIdentity-Version' => '1.4',
             'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress']
         ], $this->defaultHeaders);
-        foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
-            list($option['base_uri'], $prefix, $option['port']) = $namePrefix;
+        foreach ($this->agentParams['sidecar.eurekaUrls'] as $eurekaUrl) {
+            list($option['base_uri'], $prefix, $option['port']) = $eurekaUrl;
             $option['headers'] = $headers;
             $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']);
             $option['body'] = json_encode($this->appInstance, JSON_UNESCAPED_SLASHES);
@@ -228,7 +225,6 @@ class Sidecar
                 CLog::info('eureka ' . $option['base_uri'] . ':' . $option['port'] . ' register: failed!');
             }
         }
-        return;
     }
 
     /**
@@ -385,8 +381,8 @@ class Sidecar
                 break;
             }
             $count++;
-            foreach ($this->agentParams['sidecar.eurekaUrls'] as $namePrefix) {
-                list($option['base_uri'], $prefix, $option['port']) = $namePrefix;
+            foreach ($this->agentParams['sidecar.eurekaUrls'] as $eurekaUrl) {
+                list($option['base_uri'], $prefix, $option['port']) = $eurekaUrl;
                 $uri = $prefix . '/apps/' . strtoupper($this->agentParams['sidecar.applicationName']) . '/' . $this->instanceId;
                 $isDel = $deleteStatus[$option['base_uri']] ?? '';
                 if (200 == $isDel) {

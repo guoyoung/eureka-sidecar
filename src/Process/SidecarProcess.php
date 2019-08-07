@@ -25,7 +25,7 @@ class SidecarProcess extends UserProcess
     {
         $process->name('eureka sidecar process');
         // 定时拉取服务
-        Timer::tick(config('sidecar.pullAppTime', 20000), function (){
+        Timer::tick(config('sidecar.pullAppTime', 20000), function () {
             /**
              * @var $sidecar Sidecar
              */
@@ -34,7 +34,7 @@ class SidecarProcess extends UserProcess
         });
 
         // 定时保持心跳
-        Timer::tick(config('sidecar.healthTime', 30000), function (){
+        Timer::tick(config('sidecar.healthTime', 30000), function () {
             /**
              * @var $sidecar Sidecar
              */

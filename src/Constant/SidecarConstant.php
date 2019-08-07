@@ -9,13 +9,11 @@ namespace Sidecar\Constant;
  */
 class SidecarConstant
 {
-    const DELTA_VERSION = 'version__delta';
+    const DELTA_VERSION = 'version_delta';
 
     const SIDECAR_KEYS_PREFIX = 'eureka_sidecar';
 
-    const SIDECAR_KEYS = 'eureka_sidecar_keys';
-
-    const SIDECAR_VERSION = '1.0';
+    const SIDECAR_KEYS = 'sidecar_keys';
 
     const SIDECAR_INFO = 'sidecar_info';
 }

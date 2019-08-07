@@ -19,27 +19,6 @@ use Swoft\Bean\BeanFactory;
 class Agent implements AgentInterface
 {
     /**
-     * @return array|mixed
-     * @throws \ReflectionException
-     * @throws \Swoft\Bean\Exception\ContainerException
-     */
-    public function info()
-    {
-        /**
-         * @var $bean Sidecar
-         */
-        $bean = BeanFactory::getBean('sidecar');
-        $appInstance = $bean->getInstance();
-        return [
-            'hostName' => $appInstance['instance']['hostName'] ?? '',
-            'app' => $appInstance['instance']['app'] ?? '',
-            'ipAddr' => $appInstance['instance']['ipAddr'] ?? '',
-            'status' => $appInstance['instance']['status'] ?? '',
-            'port' => $appInstance['instance']['port']['$'] ?? ''
-        ];
-    }
-
-    /**
      * @return array
      */
     public function applications()
