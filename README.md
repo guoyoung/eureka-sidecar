@@ -15,7 +15,7 @@ composer require gyoung/eureka-sidecar
 ```
   return [
       'enable' => true,         //是否启用
-      'eurekaUrls' => 'http://127.0.0.1:8761/eureka',       //eureka注册地址，多个由逗号隔开
+      'eurekaUrls' => 'http://127.0.0.1:8761/eureka',    //eureka注册地址，多个由逗号隔开，如果地址没有端口会自动添加默认端口8761
       'serverPort' => 8089,       //sidecar端口
       'port' => 8089,             //代理服务端口
       'ipAddress' => 'http://127.0.0.1',        //代理服务ip,为空则通过swoole_get_local_ip()获取本机eth0的ip
