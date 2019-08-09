@@ -75,9 +75,11 @@ class Sidecar
      */
     public function init()
     {
-        $this->initEurekaParams();
-        $this->sidecarTable = SidecarTable::getInstance();
-        $this->httpClient = BeanFactory::getBean('eurekaHttpClient');
+        if (config('sidecar.enable', false)) {
+            $this->initEurekaParams();
+            $this->sidecarTable = SidecarTable::getInstance();
+            $this->httpClient = BeanFactory::getBean('eurekaHttpClient');
+        }
     }
 
     /**
