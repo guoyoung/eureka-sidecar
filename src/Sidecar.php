@@ -135,8 +135,13 @@ class Sidecar
             $ipAddress = 'http://' . $ipAddress;
         }
         $this->agentParams['sidecar.ipAddress'] = $ipAddress;
-        
-        $this->agentParams['sidecar.healthUri'] = config('sidecar.healthUri', '/health');
+
+        $this->agentParams['sidecar.isProxy'] = config('sidecar.isProxy', false);
+
+        $this->agentParams['sidecar.healthUri'] = '/health';
+        if ($this->agentParams['sidecar.isProxy']) {
+            $this->agentParams['sidecar.healthUri'] = config('sidecar.healthUri', '/health');
+        }
 
         $this->lastDirtyTimestamp = round(microtime(true) * 1000);
 
@@ -175,8 +180,8 @@ class Sidecar
                 'metadata' => [
                     "management.port" => $this->agentParams['sidecar.serverPort']
                 ],
-                'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . '/',
-                'statusPageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . config('statusPageUrl', '/agent/info'),
+                'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . config('homePageUrl', '/'),
+                'statusPageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . config('statusPageUrl', '/actuator/info'),
                 'healthCheckUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . $this->agentParams['sidecar.healthUri'],
                 'vipAddress' => $this->agentParams['sidecar.applicationName'],
                 'secureVipAddress' => $this->agentParams['sidecar.applicationName'],
@@ -302,24 +307,26 @@ class Sidecar
             return true;
         }
 
-        $uri = $this->agentParams['sidecar.healthUri'];
-        $option['base_uri'] = substr($this->agentParams['sidecar.ipAddress'], 7);
-        $option['port'] = $this->agentParams['sidecar.port'];
-        $option['headers'] = $this->defaultHeaders;
         $heartbeatParams = [
             'value' => 'UP',
             'lastDirtyTimestamp' => $this->lastDirtyTimestamp,
         ];
-        $result = [];
-        try {
-            $result = $this->httpClient->get($uri, $option)->getResult();
-        } catch (\Exception $e) {
-            Log::info('eureka sidecar request health uri failed: ' . $e->getMessage());
-            $heartbeatParams['value'] = 'DOWN';
-        }
-        $status = $result['status'] ?? '';
-        if (!is_array($result) || $status != 'UP') {
-            $heartbeatParams['value'] = 'DOWN';
+        if ($this->agentParams['sidecar.isProxy']) {
+            $uri = $this->agentParams['sidecar.healthUri'];
+            $option['base_uri'] = substr($this->agentParams['sidecar.ipAddress'], 7);
+            $option['port'] = $this->agentParams['sidecar.port'];
+            $option['headers'] = $this->defaultHeaders;
+            $result = [];
+            try {
+                $result = $this->httpClient->get($uri, $option)->getResult();
+            } catch (\Exception $e) {
+                Log::info('eureka sidecar request health uri failed: ' . $e->getMessage());
+                $heartbeatParams['value'] = 'DOWN';
+            }
+            $status = $result['status'] ?? '';
+            if (!is_array($result) || $status != 'UP') {
+                $heartbeatParams['value'] = 'DOWN';
+            }
         }
 
         if ('UP' == $heartbeatParams['value'] && 'UP' == $this->instanceStatus) {

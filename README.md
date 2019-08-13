@@ -15,11 +15,12 @@ composer require gyoung/eureka-sidecar
 ```
   return [
       'enable' => true,         //是否启用
+      'isProxy' => false,       //是否代理的非swoft框架服务，使用swoft框架时已实现healthUri，无需关心，默认false使用swoft
       'eurekaUrls' => 'http://127.0.0.1:8761/eureka',    //eureka注册地址，多个由逗号隔开，如果地址没有端口会自动添加默认端口8761
       'serverPort' => 8089,       //sidecar端口
       'port' => 8089,             //代理服务端口
       'ipAddress' => 'http://127.0.0.1',        //代理服务ip,为空则通过swoole_get_local_ip()获取本机eth0的ip
-      'healthUri' => '/health',    //被代理服务需提供的心跳uri，返回格式必须为: ['status' => 'UP'], json后返回，默认：/health
+      'healthUri' => '/health',    //被代理服务需提供的心跳uri，返回格式必须为: ['status' => 'UP'], json后返回，默认：/health，使用swoft框架不用填写
       'applicationName' => 'sidecar-test',  //应用名称
       'sidecarTableMaxLength' => 4096,  //swoole table单个key最大储存长度
       'pullAppTime' => 20000,  //定时拉取实例/ms，默认20000ms
