@@ -147,7 +147,7 @@ class HttpClient
         if (!isset($requestHeaders['Accept'])) {
             $requestHeaders['Accept'] = ContentType::JSON;
         }
-        if (!isset($requestHeaders['Accept'])) {
+        if (!isset($requestHeaders['Content-Type'])) {
             $requestHeaders['Content-Type'] = ContentType::JSON;
         }
 
