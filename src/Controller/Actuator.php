@@ -15,36 +15,6 @@ class Actuator
     /**
      * @return \Swoft\Http\Message\Response|\Swoft\Rpc\Server\Response
      * @throws \Swoft\Exception\SwoftException
-     * @RequestMapping("/")
-     */
-    public function index()
-    {
-        return $this->json([
-            'code' => 200,
-            'msg' => 'success',
-            'status' => true,
-            'data' => null
-        ]);
-    }
-
-    /**
-     * @return \Swoft\Http\Message\Response|\Swoft\Rpc\Server\Response
-     * @throws \Swoft\Exception\SwoftException
-     * @RequestMapping("/actuator")
-     */
-    public function actuator()
-    {
-        return $this->json([
-            'code' => 200,
-            'msg' => 'success',
-            'status' => true,
-            'data' => null
-        ]);
-    }
-    
-    /**
-     * @return \Swoft\Http\Message\Response|\Swoft\Rpc\Server\Response
-     * @throws \Swoft\Exception\SwoftException
      * @RequestMapping("/actuator/info")
      */
     public function info()
