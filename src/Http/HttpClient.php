@@ -144,10 +144,10 @@ class HttpClient
         }
 
         $requestHeaders = $options['headers'] ?? [];
-        if (!isset($requestHeaders['Accept'])) {
+        if (!isset($requestHeaders['accept']) && !isset($requestHeaders['Accept'])) {
             $requestHeaders['Accept'] = ContentType::JSON;
         }
-        if (!isset($requestHeaders['Content-Type'])) {
+        if (!isset($requestHeaders['content-type']) && !isset($requestHeaders['Content-Type'])) {
             $requestHeaders['Content-Type'] = ContentType::JSON;
         }
 
