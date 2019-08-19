@@ -165,13 +165,13 @@ class Sidecar
                     '@enabled' => 'false'
                 ],
                 'countryId' => 1,
-                'dataCenterInfo' =>[
+                'dataCenterInfo' => [
                     '@class' => 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
                     'name' => 'MyOwn'
                 ],
                 'leaseInfo' => [
-                    'renewalIntervalInSecs' => (int)(config('healthTime', 30000) / 1000),
-                    'durationInSecs' => 90,
+                    'renewalIntervalInSecs' => (int)(config('sidecar.healthTime', 5000) / 1000),
+                    'durationInSecs' => 2 * (int)(config('sidecar.healthTime', 5000) / 1000),
                     'registrationTimestamp' => round(microtime(true) * 1000),
                     'lastRenewalTimestamp' => 0,
                     'evictionTimestamp' => 0,
@@ -250,7 +250,7 @@ class Sidecar
         $lastVersion = $this->sidecarTable->get(SidecarConstant::DELTA_VERSION, SidecarConstant::SIDECAR_INFO);
         $randKey = array_rand($this->agentParams['sidecar.eurekaUrls']);
         list($option['base_uri'], $prefix, $option['port']) = $this->agentParams['sidecar.eurekaUrls'][$randKey];
-        
+
         $uri = $prefix . '/apps/delta';
         $option['headers'] = $this->defaultHeaders;
         try {
@@ -271,7 +271,7 @@ class Sidecar
         } catch (SidecarException $e) {
             Log::error('pull instances exception occured: ' . $e->getMessage());
         }
-        
+
         if (!is_array($result)) {
             return false;
         }

@@ -24,7 +24,7 @@ composer require gyoung/eureka-sidecar
       'applicationName' => 'sidecar-test',  //应用名称
       'sidecarTableMaxLength' => 4096,  //swoole table单个key最大储存长度
       'pullAppTime' => 20000,  //定时拉取实例/ms，默认20000ms
-      'healthTime' => 30000,   //定时健康检查/ms，默认30000ms
+      'healthTime' => 5000,   //定时健康检查/ms，默认5000ms
   ];
 ```
 
