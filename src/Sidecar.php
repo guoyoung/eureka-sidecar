@@ -257,7 +257,6 @@ class Sidecar
             $result = $this->httpClient->get($uri, $option)->getResult();
         } catch (SidecarException $e) {
             Log::error('versions__delta exception occured: ' . $e->getMessage());
-            return false;
         }
 
         $version = $result['applications']['versions__delta'] ?? '';
