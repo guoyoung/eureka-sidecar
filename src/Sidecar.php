@@ -257,6 +257,7 @@ class Sidecar
             $result = $this->httpClient->get($uri, $option)->getResult();
         } catch (SidecarException $e) {
             Log::error('versions__delta exception occured: ' . $e->getMessage());
+            return false;
         }
 
         $version = $result['applications']['versions__delta'] ?? '';
@@ -270,6 +271,7 @@ class Sidecar
             $result = $this->httpClient->get($uri, $option)->getResult();
         } catch (SidecarException $e) {
             Log::error('pull instances exception occured: ' . $e->getMessage());
+            return false;
         }
 
         if (!is_array($result)) {
