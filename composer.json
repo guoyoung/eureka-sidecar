@@ -2,6 +2,7 @@
     "name": "gyoung/eureka-sidecar",
     "description": "base on swoft2.0, php eureka sidecar",
     "type": "library",
+    "license": "Apache-2.0",
     "authors": [
         {
             "name": "guoyang",
