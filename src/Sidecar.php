@@ -208,7 +208,7 @@ class Sidecar
             'Accept-Encoding' => 'gzip',
             'DiscoveryIdentity-Name' => 'DefaultClient',
             'DiscoveryIdentity-Version' => '1.4',
-            'DiscoveryIdentity-Id' => $this->agentParams['sidecar.ipAddress']
+            'DiscoveryIdentity-Id' => substr($this->agentParams['sidecar.ipAddress'], 7)
         ], $this->defaultHeaders);
         foreach ($this->agentParams['sidecar.eurekaUrls'] as $eurekaUrl) {
             list($option['base_uri'], $prefix, $option['port']) = $eurekaUrl;
