@@ -75,7 +75,8 @@ class Sidecar
      */
     public function init()
     {
-        if (config('sidecar.enable', false)) {
+        $this->agentParams['sidecar.enable'] = config('sidecar.enable', false);
+        if ($this->agentParams['sidecar.enable']) {
             $this->initEurekaParams();
             $this->sidecarTable = SidecarTable::getInstance();
             $this->httpClient = BeanFactory::getBean('eurekaHttpClient');
@@ -180,8 +181,8 @@ class Sidecar
                 'metadata' => [
                     "management.port" => $this->agentParams['sidecar.serverPort']
                 ],
-                'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . config('homePageUrl', '/'),
-                'statusPageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . config('statusPageUrl', '/actuator/info'),
+                'homePageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . config('sidecar.homePageUrl', '/'),
+                'statusPageUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.serverPort'] . config('sidecar.statusPageUrl', '/actuator/info'),
                 'healthCheckUrl' => $this->agentParams['sidecar.ipAddress'] . ':' . $this->agentParams['sidecar.port'] . $this->agentParams['sidecar.healthUri'],
                 'vipAddress' => $this->agentParams['sidecar.applicationName'],
                 'secureVipAddress' => $this->agentParams['sidecar.applicationName'],
@@ -199,7 +200,6 @@ class Sidecar
      */
     public function registerInstance()
     {
-        $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
             return;
         }
@@ -242,7 +242,6 @@ class Sidecar
      */
     public function pullInstances()
     {
-        $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
             return true;
         }
@@ -263,7 +262,6 @@ class Sidecar
         if ($lastVersion && $lastVersion == $version) {
             return true;
         }
-        $lastVersion = $version;
 
         $uri = $prefix . '/apps';
         try {
@@ -279,20 +277,18 @@ class Sidecar
 
         $applicationsKeys = [];
         $applications = $result['applications']['application'] ?? [];
-        if (isset($applications['instance']) && isset($applications['name'])) {
-            // 兼容老版本只有一个实例时返回格式不一致问题
-            $key = SidecarConstant::SIDECAR_KEYS_PREFIX . md5(strtoupper($applications['name']));
-            $applicationsKeys[] = $key;
-            $this->sidecarTable->set($key, [SidecarConstant::SIDECAR_INFO => json_encode($applications['instance'])]);
-        } else {
-            foreach ($applications as $app) {
-                $key = SidecarConstant::SIDECAR_KEYS_PREFIX . md5(strtoupper($app['name']));
-                $applicationsKeys[] = $key;
-                $this->sidecarTable->set($key, [SidecarConstant::SIDECAR_INFO => json_encode($app['instance'])]);
+        foreach ($applications as $app) {
+            if (!isset($app['name']) || !isset($app['instance'])) {
+                continue;
             }
+            $key = SidecarConstant::SIDECAR_KEYS_PREFIX . md5(strtoupper($app['name']));
+            $applicationsKeys[] = $key;
+            $this->sidecarTable->set($key, [SidecarConstant::SIDECAR_INFO => json_encode($app['instance'])]);
         }
-        $this->sidecarTable->set(SidecarConstant::SIDECAR_KEYS, [SidecarConstant::SIDECAR_INFO => json_encode($applicationsKeys)]);
-        $this->sidecarTable->set(SidecarConstant::DELTA_VERSION, [SidecarConstant::SIDECAR_INFO => $lastVersion]);
+        if (!empty($applicationsKeys)) {
+            $this->sidecarTable->set(SidecarConstant::SIDECAR_KEYS, [SidecarConstant::SIDECAR_INFO => json_encode($applicationsKeys)]);
+            $this->sidecarTable->set(SidecarConstant::DELTA_VERSION, [SidecarConstant::SIDECAR_INFO => $version]);
+        }
         return true;
     }
 
@@ -303,7 +299,6 @@ class Sidecar
      */
     public function heartbeat()
     {
-        $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
             return true;
         }
@@ -377,7 +372,6 @@ class Sidecar
      */
     public function unregisterInstance(): void
     {
-        $this->agentParams['sidecar.enable'] = config('sidecar.enable');
         if (!$this->agentParams['sidecar.enable']) {
             return;
         }
